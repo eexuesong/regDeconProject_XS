@@ -36,9 +36,9 @@ clear all;
 
 %% GUI part
 % load raw data
-[filename_data, path_data] = uigetfile('*.tif','Choose any one of raw data');
+[filename_data, path_data] = uigetfile('*.tif', 'Choose any one of raw data');
 % load PSF data
-[filename_psf, path_psf] = uigetfile('*.tif','Choose any one of PSF image', path_data);
+[filename_psf, path_psf] = uigetfile('*.tif', 'Choose any one of PSF image', path_data);
 
 % set parameters
 dlg_title = 'Set Parameters';
