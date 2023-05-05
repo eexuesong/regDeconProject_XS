@@ -630,6 +630,8 @@ end
 function PSF_out = flipPSF(PSF_in)
 % function outPSF = flipPSF(inPSF)
 % outPSF(i, j, k) = inPSF(m - i + 1, n - j + 1, l - k + 1);
+%{
+Deprecated: Min's code
 [ny, nx, nz] = size(PSF_in);
 PSF_out = zeros(ny, nx, nz);
 for i = 1:ny
@@ -639,6 +641,11 @@ for i = 1:ny
         end
     end
 end
+%}
+
+PSF_out = flip(PSF_in, 1);
+PSF_out = flip(PSF_out, 2);
+PSF_out = flip(PSF_out, 3);
 end
 
 %% Function: generate 3D Gaussian PSF with FWHM input
