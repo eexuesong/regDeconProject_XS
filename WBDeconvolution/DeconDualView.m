@@ -26,28 +26,20 @@ and fed to the deconvolution scripts correspondingly.
 
 clear all;
 
-%% GUI part
+%% Load data
 % load raw data
-[filename_data, path_data] = uigetfile('*.tif', 'Choose any one of raw data');
+filename_data = 'StackA_0.tif';
+path_data = 'D:\Code\Matlab_Code\Code_from_Min\regDeconProject-master_XS\RegistrationFusion\DataForTest';
 % load PSF data 
-[filename_psf, path_psf] = uigetfile('*.tif', 'Choose any one of PSF image', path_data);
+filename_psf = 'PSFA.tif';
+path_psf = 'D:\Code\Matlab_Code\Code_from_Min\regDeconProject-master_XS\RegistrationFusion\DataForTest';
 
 % set parameters
-dlg_title = 'Set Parameters';
-prompt = {'Enter deconvolution method: 1 for traditional decon; 2 for WB',...
-    'Enter processing mode: 0 for CPU; 1 for GPU', 'Enter iteration number: ', ...
-    'Enter time points to be processed'};
-num_lines = 2;
-defaultans = {'2', '1', '1', '0-2'};
-answer = inputdlg(prompt, dlg_title, num_lines, defaultans);
-
-% get parameters
-deconMethod = str2double(answer{1});    % Deconvolution method: 1 for traditional deconvolution; 2 for Wiener-Butterworth deconvolution
-proMode = str2double(answer{2});        % processing mode: 0 for CPU; 1 for GPU
-itNum = str2double(answer{3});          % iteration number
-timepoints = strsplit(answer{4}, '-');
-t1 = str2double(timepoints{1});
-t2 = str2double(timepoints{2});
+deconMethod = 2;                        % Deconvolution method: 1 for traditional deconvolution; 2 for Wiener-Butterworth deconvolution
+proMode = 1;                            % processing mode: 0 for CPU; 1 for GPU
+itNum = 1;                              % iteration number
+t1 = 0;
+t2 = 1;
 gpuFlag = 0;
 if proMode == 1
     gpuFlag = 1;    % 0: CPU; 1: GPU  
@@ -55,13 +47,13 @@ if proMode == 1
 end
 
 %% Create an output folder
-path_output = strcat(path_data, 'results_diSPIM\');
+path_output = strcat(path_data, '\', 'results_diSPIM\');
 mkdir(path_output);
 
 %% Read images
 % stackIn = single(ReadTifStack([path_data, filename_data]));
-[stack_In, header_data] = ImageJ_formatted_TIFF.ReadTifStack(strcat(path_data, filename_data));
-[Sy, Sx, Sz] = size(stack_In);
+[stack_In, header_data] = ImageJ_formatted_TIFF.ReadTifStack(strcat(path_data, '\', filename_data));
+[Sx, Sy, Sz] = size(stackIn);
 
 %% Forward and back projectors
 disp('Preprocessing forward and back projectors ...');
@@ -116,9 +108,8 @@ end
 disp('Start deconvolution...');
 % smallValue = 0.01;
 for imgNum = t1:t2
-    disp(append('...Processing image #: ', num2str(imgNum)));
-    filename_In_A = strcat(path_data, 'StackA_', num2str(imgNum), '.tif');
-    filename_In_B = strcat(path_data, 'StackB_', num2str(imgNum), '.tif');
+    filename_In_A = strcat(path_data, '\', 'StackA_', num2str(imgNum), '.tif');
+    filename_In_B = strcat(path_data, '\', 'StackB_', num2str(imgNum), '.tif');
     [stack_In_A, header_data_A] = ImageJ_formatted_TIFF.ReadTifStack(filename_In_A);
     [stack_In_B, header_data_B] = ImageJ_formatted_TIFF.ReadTifStack(filename_In_B);
     stack_In_A = single(stack_In_A);
@@ -131,13 +122,13 @@ for imgNum = t1:t2
         stackA = stack_In_A;
         stackB = stack_In_B;
     end
-    %     stackA = max(stackA, smallValue);
-    %     stackB = max(stackB, smallValue);
+    %     stackA = max(stackA,smallValue);
+    %     stackB = max(stackB,smallValue);
     stackA(stackA <= 0) = eps;
     stackB(stackB <= 0) = eps;
 
     Estimate = (stackA + stackB) / 2;
-    for i = 1:itNum
+    for i = 1:itNum         
         %         Estimate = Estimate .* ConvFFT3_S(stackA ./ ConvFFT3_S(Estimate, OTFA_fp), OTFA_bp);
         %         Estimate = max(Estimate, smallValue);
         %         Estimate = Estimate .* ConvFFT3_S(stackB ./ ConvFFT3_S(Estimate, OTFB_fp), OTFB_bp);
@@ -159,9 +150,9 @@ for imgNum = t1:t2
     end
 
     if gpuFlag
-        stack_out = gather(Estimate);
+        output = gather(Estimate);
     else
-        stack_out = Estimate;
+        output = Estimate;
     end
 
     if header_data.BitsPerSample == 16
@@ -171,7 +162,7 @@ for imgNum = t1:t2
             stack_out = uint16(65535 * stack_out ./ max(stack_out, [], 'all'));
         end
     end
-    
+
     % Write deconvolved images
     filename_Out = strcat(path_output, 'Decon_', num2str(imgNum), '.tif');
     if isempty(header_data.resolution)
@@ -200,7 +191,6 @@ end
 if gpuFlag
     reset(g);   % reset GPU
 end
-
 disp('Deconvolution completed !!!');
 
 %% Function: zero padding PSF
