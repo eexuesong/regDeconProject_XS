@@ -96,7 +96,7 @@ PSFA_fp = align_size(PSF1, Sx, Sy, Sz);
 PSFB_fp = align_size(PSF2, Sx, Sy, Sz);
 PSFA_bp = align_size(PSF3, Sx, Sy, Sz);
 PSFB_bp = align_size(PSF4, Sx, Sy, Sz);
-if(gpuFlag)
+if gpuFlag
     g = gpuDevice(gpuDevNum); 
     reset(g); wait(g); 
     disp(append('GPU Memory before RL deconvolution: ', num2str(g.FreeMemory / 1024 / 1024 / 1024), ' GB'));
