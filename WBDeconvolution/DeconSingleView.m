@@ -152,7 +152,7 @@ for imgNum = t1:t2
     [stack_In, header_data] = ImageJ_formatted_TIFF.ReadTifStack(filename_In);
     stack_In = single(stack_In);
 
-    if(gpuFlag)
+    if gpuFlag
         stack = gpuArray(stack_In);
     else
         stack = stack_In;
