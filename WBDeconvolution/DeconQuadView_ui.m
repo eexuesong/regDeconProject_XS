@@ -117,7 +117,7 @@ PSFD_bp = align_size(PSF8, Sx, Sy, Sz);
 if gpuFlag
     g = gpuDevice(gpuDevNum); 
     reset(g); wait(g); 
-    disp(append('GPU Memory before RL deconvolution: ', num2str(g.FreeMemory / 1024 / 1024 / 1024), ' GB'));
+    disp(append('GPU Memory before calculating OTFs: ', num2str(g.FreeMemory / 1024 / 1024 / 1024), ' GB'));
 
     OTFA_fp = fftn(ifftshift(gpuArray(single(PSFA_fp))));
     OTFB_fp = fftn(ifftshift(gpuArray(single(PSFB_fp))));
@@ -139,6 +139,7 @@ else
 end
 
 %% Deconvolution
+disp(append('GPU Memory before RL deconvolution: ', num2str(g.FreeMemory / 1024 / 1024 / 1024), ' GB'));
 disp('Start deconvolution...');
 % smallValue = 0.001;
 for imgNum = t1:t2
