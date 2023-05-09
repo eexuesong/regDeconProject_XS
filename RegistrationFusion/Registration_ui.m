@@ -129,7 +129,7 @@ function pbYes(inputDialog, bg, txa, path_data)
         % Read images
         filename_A = strcat(path_data, 'StackA_', num2str(imgNum), '.tif');
         filename_B = strcat(path_data, 'StackB_', num2str(imgNum), '.tif');
-        [stackA, headerA] = ImageJ_formatted_TIFF.ReadTifStack(filename_A);
+        [stackA, ~] = ImageJ_formatted_TIFF.ReadTifStack(filename_A);
         [stackB, headerB] = ImageJ_formatted_TIFF.ReadTifStack(filename_B);
         stackA = single(stackA);
         stackB = single(stackB);        
