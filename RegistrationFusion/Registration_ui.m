@@ -28,6 +28,7 @@ where N indicates the number of time points.
 %}
 
 clear all;
+warning('off', 'all');
 
 %% GUI part
 % load raw data

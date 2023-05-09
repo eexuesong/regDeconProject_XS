@@ -12,6 +12,7 @@ the relevant time point. Here we will register B view to A view.
 %}
 
 clear all;
+warning('off', 'all');
 
 %% Load data
 % load raw data
