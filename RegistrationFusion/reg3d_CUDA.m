@@ -63,7 +63,7 @@ FTOLDefault = 0.0001;
 itNumLimitDefault = 3000;
 devNumDefault = 0;
 gpuMemModeDefault = 1;
-flagVerbose = 0; % verbose not work for MATLAB
+verbose = 0; % verbose not work for MATLAB
 switch(nargin)
     case 4
         regChoice = regChoiceDefault;
@@ -105,41 +105,43 @@ end
 
 %% load dynamic-link library
 lib_load(libPath, libName);
-imSize1 = size(img1);
-imSize2 = size(img2);
+img1_size = size(img1);
+img2_size = size(img2);
 
 %% Create arguments
 % results 
-imgReg = zeros(imSize1);
+imgReg = zeros(img1_size, 'single');
 h_imgReg = libpointer('singlePtr', imgReg); % registration feedback pointer: registered image
 
-% input images
-h_img1 = libpointer('singlePtr', img1);
-h_img2 = libpointer('singlePtr', img2);
-    
-h_imSize1 = libpointer('uint32Ptr', imSize1);   % image size pointer
-h_imSize2 = libpointer('uint32Ptr', imSize2);   % image size pointer
-
+% input transform matrix
 tmxPtr = libpointer('singlePtr', iTmx); % input matrix pointer
+
+% input images
+h_img1 = libpointer('singlePtr', img1);             % image pointer
+h_img2 = libpointer('singlePtr', img2);             % image pointer
+h_img1_size = libpointer('uint32Ptr', img1_size);   % image size pointer
+h_img2_size = libpointer('uint32Ptr', img2_size);   % image size pointer
+
+% parameters
 records = zeros(1, 11);
-regRecords = libpointer('singlePtr', records);  % reg records and feedback
+h_records = libpointer('singlePtr', records);  % reg records and feedback
 
 %% Registration
-cudaStatus = calllib(libName, 'reg3d', h_imgReg, tmxPtr, h_img1, h_img2, ...
-    h_imSize1, h_imSize2, regChoice, affMethod, ...
-    flagTmx, FTOL, itNumLimit, devNum, gpuMemMode, flagVerbose, regRecords);
+cudaStatus = calllib(libName, 'reg3d', h_imgReg, tmxPtr, h_img1, h_img2, h_img1_size, h_img2_size,...
+    regChoice, affMethod, flagTmx, FTOL, itNumLimit,...
+    devNum, gpuMemMode, verbose, h_records);
 
 if cudaStatus ~= 0
     disp('registration is probably wrong')
 end
 
-imgReg = reshape(h_imgReg.Value, imSize1);
+imgReg = reshape(h_imgReg.Value, img1_size);
 oTmx = tmxPtr.Value;
 
 clear h_imgReg h_img1 h_img2;
 
 % feed back record if necessary
-records = regRecords.Value;
+records = h_records.Value;
 % ncc = records(4);
 % gMemPost = records(11);
 

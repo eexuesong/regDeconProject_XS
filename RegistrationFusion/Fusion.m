@@ -1,25 +1,63 @@
-% Xuesong Li 05/08/2023:
+% Xuesong Li 05/09/2023:
 
 %{
-Registration.m: do registration for time-sequence images of two views,
-the two view images are assumed to have same pixel size and oriented 
+Fusion.m: do registration and re for time-sequence images of two views,
+the two view images (input) are assumed to have isotripic pixel size and oriented 
 in the same direction.
 
 Before running the code, users should organize all the input data as TIFF 
 stacks (Fig. C1): StackA_N, StackB_N … etc, where the capital letters 
 A and B indicate the two perpendicular views; and the number N indicates 
 the relevant time point. Here we will register B view to A view.
+
+Users need to generate forward projectors and Wiener-Butterworth backward 
+projectors according to the Online Methods and Supplementary Note 2 
+(or the BackProjector.m script referenced above). The forward and backward 
+projectors should be oriented from the same perspective as their 
+corresponding views. These projector images can be placed in the same 
+folder as the input data or grouped into another folder, named PSFA.tif 
+for the forward projector of the first view, PSFA_BP.tif for the backward 
+projector of the first view, PSFB.tif for the forward projector of the 
+second view, and PSFB_BP.tif for the forward projector of the second view. 
+
+Note that if the backward projectors are the transpose of the forward 
+projectors, then the deconvolution is equivalent to traditional 
+Richardson-Lucy deconvolution.
+
+While running the Fusion.m script, three dialog boxes will pop up to guide 
+users to 
+(1) upload the raw dual-view data (see Fig. C1); 
+(2) upload the forward and backward projectors; 
+(3) set parameters (similar to Fig. C4 except there is an input for setting
+ the iteration number) to
+a) choose registration mode:
+    1: translation only;
+    2: rigid body;
+    3: 7 degrees of freedom (translation, rotation, scaling equally in 3 dimensions);
+    4: 9 degrees of freedom (translation, rotation, scaling);
+    5: 12 degrees of freedom (translation, rotation, scaling, shearing);
+b) set the iteration number (the typical number of iterations we used for 
+Wiener-Butterworth deconvolution and traditional deconvolution is 1 and 10-20, respectively);
+c) set the number of time points (in range form, e.g. 0-9) to be processed.
+
+After processing, the registered B view data and joint deconvolution 
+outcomes will be saved in the same folder that contains the input data. 
+They are saved as StackB_reg_N and Decon_N, where N indicates the number 
+of time points.
 %}
 
 clear all;
-warning('off', 'all');
+% warning('off', 'all');
 
 %% Load data
 % load raw data
 filename_data = 'StackA_0.tif';
 path_data = 'D:\Code\Matlab_Code\Code_from_Min\regDeconProject-master_XS\RegistrationFusion\DataForTest';
+% load PSF data 
+path_psf = 'D:\Code\Matlab_Code\Code_from_Min\regDeconProject-master_XS\RegistrationFusion\DataForTest';
 
 % set parameters
+itNum = 10;
 t1 = 0;
 t2 = 1;
 
@@ -32,7 +70,7 @@ libHFile = strcat(libPath, libName, '.h');
 loadlibrary(libFile, libHFile);
 
 %% Create an output folder
-path_output = strcat(path_data, '\', 'results\');
+path_output = [path_data, '\', 'results\'];
 mkdir(path_output);
 
 %% Read images
@@ -45,10 +83,21 @@ stackB = single(stackB);
 sizeA = size(stackA);
 sizeB = size(stackB);
 
+%% Forward and back projectors
+[PSFA, ~] = ImageJ_formatted_TIFF.ReadTifStack(strcat(path_psf, '\', 'PSFA.tif'));
+[PSFB, ~] = ImageJ_formatted_TIFF.ReadTifStack(strcat(path_psf, '\', 'PSFB.tif'));
+[PSFA_bp, ~] = ImageJ_formatted_TIFF.ReadTifStack(strcat(path_psf, '\', 'PSFA_BP.tif'));
+[PSFB_bp, ~] = ImageJ_formatted_TIFF.ReadTifStack(strcat(path_psf, '\', 'PSFB_BP.tif'));
+PSFA = single(PSFA);
+PSFB = single(PSFB);
+PSFA_bp = single(PSFA_bp);
+PSFB_bp = single(PSFB_bp);
+PSF_size = size(PSFA);
+
 %% Create arguments
 % results
-regB = zeros(sizeA);
-h_regB = libpointer('singlePtr', regB);     % registration feedback pointer: registered B stack
+h_regB = libpointer('singlePtr', stackA);   % registration feedback pointer: registered B stack
+h_decon = libpointer('singlePtr', stackA);  % decon feedback pointer: decon result
 
 % input transform matrix
 iTmx = eye(4);  % initial matrix for registration between two views. Tmx = [1 0 0 0; 0 1 0 0; 0 0 1 0; 0 0 0 1];
@@ -60,7 +109,14 @@ h_stackB = libpointer('singlePtr', stackB);     % image pointer
 h_stackA_size = libpointer('uint32Ptr', sizeA); % image size pointer
 h_stackB_size = libpointer('uint32Ptr', sizeB); % image size pointer
 
-% configurations
+% input PSFs
+h_PSFA = libpointer('singlePtr', PSFA);             % PSF pointer
+h_PSFB = libpointer('singlePtr', PSFB);             % PSF pointer
+h_PSFA_bp = libpointer('singlePtr', PSFA_bp);       % PSF pointer
+h_PSFB_bp = libpointer('singlePtr', PSFB_bp);       % PSF pointer
+h_PSF_size = libpointer('uint32Ptr', PSF_size);     % PSF size pointer
+
+%  configurations
 regChoice = 2;  % *** registration choice: regChoice
                 % 0: no phasor or affine registration; if flagTmx is true, transform d_img2 based on input matrix;
                 % 1: phasor registraion (pixel-level translation only);
@@ -91,8 +147,7 @@ records = zeros(1, 11);
 h_records = libpointer('singlePtr', records);   % reg records and feedback
 tic;
 
-%% Registration
-disp('Start registration...');
+disp('Start processing...');
 for imgNum = t1:t2
     cTime1 = toc;
     disp(append('...Processing image #: ', num2str(imgNum)));
@@ -107,18 +162,19 @@ for imgNum = t1:t2
     h_stackA.Value = stackA;
     h_stackB.Value = stackB;
 
-    %         if imgNum ~= t1
-    %             regChoice = 2;      % affine registration with input matrix
-    %             flagTmx = 1;        % use last registration matrix as input
-    %             if affMethod == 7
-    %                 affMethod = 5;  % change to directly 12 DOF
-    %             end
-    %         end
+    if imgNum ~= t1
+        regChoice = 2;      % affine registration with input matrix
+        flagTmx = 1;        % use last registration matrix as input
+        if affMethod == 7
+            affMethod = 5;  % change to directly 12 DOF
+        end
+    end
 
-    % run registration function: reg3d
+    %% Registration
+    disp('... ... Performing registration ...');
     runStatus = calllib(libName, 'reg3d', h_regB, tmxPtr, h_stackA, h_stackB, h_stackA_size, h_stackB_size,...
-            regChoice, affMethod, flagTmx, FTOL, itLimit,...
-            deviceNum, gpuMemMode, verbose, h_records);
+        regChoice, affMethod, flagTmx, FTOL, itLimit,...
+        deviceNum, gpuMemMode, verbose, h_records);
     stackB_reg = reshape(h_regB.Value, sizeA);
 
     % Write registered images
@@ -153,6 +209,46 @@ for imgNum = t1:t2
         end
     end
 
+    %% Deconvolution
+    disp('... ... Performing deconvolution ...');
+    flagConstInitial = 0;
+    flagUnmatch = 0;
+    runStatus = calllib(libName, 'decon_dualview', h_decon, h_stackA, h_regB, h_stackA_size, h_PSFA, h_PSFB, h_PSF_size,...
+        flagConstInitial, itNum, deviceNum, gpuMemMode, verbose, h_records, flagUnmatch, h_PSFA_bp, h_PSFB_bp);
+    stack_decon = reshape(h_decon.Value, sizeA);
+
+    % Write deconvolved images
+    if headerB.BitsPerSample == 16
+        if max(stack_decon, [], 'all') <= 65535
+            stack_decon = uint16(stack_decon);
+        else
+            stack_decon = uint16(65535 * stack_decon ./ max(stack_decon, [], 'all'));
+        end
+    end
+
+    filename_decon = strcat(path_output, 'Decon_', num2str(imgNum), '.tif');
+    if isempty(headerB.resolution)
+        ImageJ_formatted_TIFF.WriteTifStack(stack_decon, filename_decon);
+    elseif isempty(headerB.spacing)
+        switch headerB.unit
+            case 'um'
+                ImageJ_formatted_TIFF.WriteTifStack(stack_decon, filename_reg, headerB.resolution);
+            case 'nm'
+                ImageJ_formatted_TIFF.WriteTifStack(stack_decon, filename_reg, headerB.resolution / 1000);
+            otherwise
+                ImageJ_formatted_TIFF.WriteTifStack(stack_decon, filename_reg, headerB.resolution);
+        end
+    else
+        switch headerB.unit
+            case 'um'
+                ImageJ_formatted_TIFF.WriteTifStack(stack_decon, filename_reg, headerB.resolution, headerB.spacing);
+            case 'nm'
+                ImageJ_formatted_TIFF.WriteTifStack(stack_decon, filename_reg, headerB.resolution / 1000, headerB.spacing / 1000);
+            otherwise
+                ImageJ_formatted_TIFF.WriteTifStack(stack_decon, filename_reg, headerB.resolution, headerB.spacing);
+        end
+    end
+
     cTime2 = toc;
     disp(append('... ... Time cost for current image: ', num2str(cTime2 - cTime1), ' s'));
 end
@@ -161,4 +257,4 @@ end
 unloadlibrary(libName);
 cTime3 = toc;
 disp(append('... Total time cost: ', num2str(cTime3), ' s'));
-disp('Registration completed !!!');
+disp('Processing completed !!!');

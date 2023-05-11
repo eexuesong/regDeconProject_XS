@@ -73,46 +73,22 @@ function pbYes(inputDialog, bg, txa, path_data)
     %% Load DLL lib
     libPath = '..\cudaLib\bin\win\';
     libName = 'libapi';
-    libFile = strcat(libPath, libName, '.dll');
-    libHFile = strcat(libPath, libName, '.h');
-    loadlibrary(libFile, libHFile);
 
     %% Create an output folder
     path_output = strcat(path_data, 'results\');
     mkdir(path_output);
 
-    %% Read images
-    filename_A = strcat(path_data, 'StackA_', num2str(t1), '.tif');
-    filename_B = strcat(path_data, 'StackB_', num2str(t1), '.tif');
-    [stackA, ~] = ImageJ_formatted_TIFF.ReadTifStack(filename_A);
-    [stackB, ~] = ImageJ_formatted_TIFF.ReadTifStack(filename_B);
-    stackA = single(stackA);
-    stackB = single(stackB);
-    sizeA = size(stackA);
-    sizeB = size(stackB);
-
     %% Create arguments
-    % results
-    regB = zeros(sizeA);
-    h_regB = libpointer('singlePtr', regB);     % registration feedback pointer: registered B stack
-    
     % input transform matrix
     iTmx = eye(4);  % initial matrix for registration between two views. Tmx = [1 0 0 0; 0 1 0 0; 0 0 1 0; 0 0 0 1];
-    tmxPtr = libpointer('singlePtr', iTmx);     % input matrix pointer
-    
-    % input images
-    h_stackA = libpointer('singlePtr', stackA);     % image pointer
-    h_stackB = libpointer('singlePtr', stackB);     % image pointer
-    h_stackA_size = libpointer('uint32Ptr', sizeA); % image size pointer
-    h_stackB_size = libpointer('uint32Ptr', sizeB); % image size pointer
 
     % configurations
-    regChoice = 2;  % *** registration choice: regChoice
-                    % 0: no phasor or affine registration; if flagTmx is true, transform d_img2 based on input matrix;
-                    % 1: phasor registraion (pixel-level translation only);
-                    % 2: affine registration (with or without input matrix);
-                    % 3: phasor registration --> affine registration (input matrix disabled);
-                    % 4: 2D MIP registration --> affine registration (input matrix disabled);
+    regChoice = 2; % *** registration choice: regChoice
+                % 0: no phasor or affine registration; if flagTmx is true, transform d_img2 based on input matrix;
+                % 1: phasor registraion (pixel-level translation only);
+                % 2: affine registration (with or without input matrix);
+                % 3: phasor registration --> affine registration (input matrix disabled);
+                % 4: 2D MIP registration --> affine registration (input matrix disabled);
     
     switch(bgChoice)
                 % affine registration method: only if regChoice == 2, 3, 4
@@ -143,9 +119,6 @@ function pbYes(inputDialog, bg, txa, path_data)
     % parameters
     deviceNum = 0;  % GPU device: numbering from 0 by CUDA;
     gpuMemMode = 1; % 1: efficient GPU mode; 2: GPU memory-saved mode
-    verbose = 0;    % show details during processing: does not work for MATLAB
-    records = zeros(1, 11);
-    h_records = libpointer('singlePtr', records);   % reg records and feedback
     tic;
     
     %% Registration
@@ -161,22 +134,18 @@ function pbYes(inputDialog, bg, txa, path_data)
         [stackB, headerB] = ImageJ_formatted_TIFF.ReadTifStack(filename_B);
         stackA = single(stackA);
         stackB = single(stackB);
-        h_stackA.Value = stackA;
-        h_stackB.Value = stackB;
 
         %         if imgNum ~= t1
         %             regChoice = 2;      % affine registration with input matrix
         %             flagTmx = 1;        % use last registration matrix as input
+        %             iTmx = oTmx;
         %             if affMethod == 7
         %                 affMethod = 5;  % change to directly 12 DOF
         %             end
         %         end
 
         % run registration function: reg3d
-        runStatus = calllib(libName, 'reg3d', h_regB, tmxPtr, h_stackA, h_stackB, h_stackA_size, h_stackB_size,...
-            regChoice, affMethod, flagTmx, FTOL, itLimit,...
-            deviceNum, gpuMemMode, verbose, h_records);
-        stackB_reg = reshape(h_regB.Value, sizeA);
+        [stackB_reg, oTmx] = reg3d_CUDA(stackA, stackB, libPath, libName, regChoice, affMethod, flagTmx, iTmx, FTOL, itLimit, deviceNum, gpuMemMode);
         
         % Write registered images
         if headerB.BitsPerSample == 16
@@ -214,8 +183,6 @@ function pbYes(inputDialog, bg, txa, path_data)
         disp(append('... ... Time cost for current image: ', num2str(cTime2 - cTime1), ' s'));
     end
 
-    %% Unload DLL lib 
-    unloadlibrary(libName);
     cTime3 = toc;
     disp(append('... Total time cost: ', num2str(cTime3), ' s'));
     disp('Registration completed !!!');
