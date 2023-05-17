@@ -210,6 +210,7 @@ else
     end
 end
 
+%% Parameter for Butterworth filter
 if(beta == 1)
     beta = beta_fp;
     if(verboseFlag)
@@ -287,7 +288,7 @@ switch bp_type
         OTF_Wiener_abs = fftshift(abs(OTF_Wiener));
         OTF_Wiener_abs_xy = abs(squeeze(OTF_Wiener_abs(:, :, Soz))); % central XY slice
         OTF_Wiener_abs_x_max = max(OTF_Wiener_abs_xy, [], 1);
-        to1 = max(round(nxo - OTF_cutoff_x), 1); to2 = min(round(nxo + OTF_cutoff_x), ny);
+        to1 = max(round(nxo - OTF_cutoff_x), 1); to2 = min(round(nxo + OTF_cutoff_x), nx);
         beta_wiener_x = (OTF_Wiener_abs_x_max(to1) + OTF_Wiener_abs_x_max(to2)) / 2;    % OTF frequency intensity at cutoff: x
         if(verboseFlag)
             disp(['Wiener cutoff gain: beta_wiener_x = ' num2str(beta_wiener_x)]);
